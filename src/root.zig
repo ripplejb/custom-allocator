@@ -16,9 +16,9 @@ pub fn add(a: i32, b: i32) i32 {
 pub fn getAlignedAddress(comptime T: type, address: usize) usize {
     const mysize: usize = @alignOf(T);
 
-    const padding = ((address + mysize - 1) & ~(mysize - 1)) - address;
+    return ((address + mysize - 1) & ~(mysize - 1));
 
-    return address + padding;
+    // return address + padding;
 }
 
 test "basic add functionality" {
