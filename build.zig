@@ -41,6 +41,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const simpleBumpAllocatorMod = b.addModule("simple_bump_allocator", .{
+        .root_source_file = b.path("src/simpleBumpAllocator.zig"),
+        .target = target,
+    });
+
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
     // to the module defined above, it's sometimes preferable to split business
@@ -79,6 +84,7 @@ pub fn build(b: *std.Build) void {
                 // can be extremely useful in case of collisions (which can happen
                 // importing modules from different packages).
                 .{ .name = "custom_allocator", .module = mod },
+                .{ .name = "simple_bump_allocator", .module = simpleBumpAllocatorMod },
             },
         }),
     });
@@ -136,12 +142,18 @@ pub fn build(b: *std.Build) void {
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
+    const sba_mod_tests = b.addTest(.{
+        .root_module = simpleBumpAllocatorMod,
+    });
+    const run_sba_mod_tests = b.addRunArtifact(sba_mod_tests);
+
     // A top level step for running all tests. dependOn can be called multiple
     // times and since the two run steps do not depend on one another, this will
     // make the two of them run in parallel.
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+    test_step.dependOn(&run_sba_mod_tests.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //

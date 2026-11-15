@@ -17,8 +17,6 @@ pub fn getAlignedAddress(comptime T: type, address: usize) usize {
     const mysize: usize = @alignOf(T);
 
     return ((address + mysize - 1) & ~(mysize - 1));
-
-    // return address + padding;
 }
 
 test "basic add functionality" {
