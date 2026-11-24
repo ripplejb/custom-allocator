@@ -1,20 +1,11 @@
 const std = @import("std");
 const Io = std.Io;
 
-const custom_allocator = @import("custom_allocator");
+const contacts = @import("contacts");
+
+const MenuItem = enum { @"1", @"2", @"3", @"4", @"5", @"6" };
 
 pub fn main(init: std.process.Init) !void {
-    // Prints to stderr, unbuffered, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    // This is appropriate for anything that lives as long as the process.
-    const arena: std.mem.Allocator = init.arena.allocator();
-
-    // Accessing command line arguments:
-    const args = try init.minimal.args.toSlice(arena);
-    for (args) |arg| {
-        std.log.info("arg: {s}", .{arg});
-    }
 
     // In order to do I/O operations need an `Io` instance.
     const io = init.io;
@@ -26,9 +17,96 @@ pub fn main(init: std.process.Init) !void {
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const stdout_writer = &stdout_file_writer.interface;
 
-    try custom_allocator.printAnotherMessage(stdout_writer);
+    var stdin_buffer: [100]u8 = undefined;
+    var stdin_file_reader: Io.File.Reader = .init(.stdin(), io, &stdin_buffer);
+    const stdin_reader = &stdin_file_reader.interface;
+    var contectBook: contacts.ContactBook = try .init();
+    defer contectBook.deinit();
 
-    try stdout_writer.flush(); // Don't forget to flush!
+    var input_buf: [100]u8 = undefined;
+
+    while (true) {
+        try writeMenu(stdout_writer);
+        const input = try inputReader("Type something here and press enter: ", &input_buf, stdout_writer, stdin_reader);
+        try stdout_writer.print("\n{s} is your input.\n", .{input});
+        try stdout_writer.flush();
+
+        const selection = std.meta.stringToEnum(MenuItem, input) orelse {
+            try stdout_writer.print("Invalid Input\n", .{});
+            try stdout_writer.flush();
+            continue;
+        };
+
+        switch (selection) {
+            .@"1" => try AddContact(&contectBook, stdout_writer, stdin_reader),
+            .@"2" => try contectBook.listAll(stdout_writer),
+            .@"3" => try searchContact(&contectBook, stdout_writer, stdin_reader),
+            .@"4" => try removeContact(&contectBook, stdout_writer, stdin_reader),
+            .@"5" => break,
+            else => {},
+        }
+    }
+}
+
+pub fn writeMenu(writer: *Io.Writer) !void {
+    try writer.print("\n", .{});
+    try writer.print("Select your option:\n", .{});
+    try writer.print("======================\n", .{});
+    try writer.print("[1] New Contact\n", .{});
+    try writer.print("[2] List Contacts\n", .{});
+    try writer.print("[3] Search Contacts\n", .{});
+    try writer.print("[4] Delete Contact\n", .{});
+    try writer.print("[5] Exit\n", .{});
+    try writer.flush();
+}
+
+pub fn inputReader(prompt: []const u8, buf: []u8, writer: *Io.Writer, reader: *Io.Reader) ![]const u8 {
+    try writer.print("{s} ", .{prompt});
+    try writer.flush();
+
+    const input = (try reader.takeDelimiter('\n')) orelse return error.EndOfStream;
+    const clean = std.mem.trimEnd(u8, input, "\r");
+    @memcpy(buf[0..clean.len], clean);
+    return buf[0..clean.len];
+}
+
+pub fn AddContact(contactBook: *contacts.ContactBook, writer: *Io.Writer, reader: *Io.Reader) !void {
+    try writer.print("\n", .{});
+    var name_buf: [100]u8 = undefined;
+    var email_buf: [100]u8 = undefined;
+    var phone_buf: [100]u8 = undefined;
+
+    const name = try inputReader("Name ==>", &name_buf, writer, reader);
+    const email = try inputReader("email ==>", &email_buf, writer, reader);
+    const phone = try inputReader("Phone ==>", &phone_buf, writer, reader);
+
+    try contactBook.createContact(name, email, phone);
+}
+
+pub fn removeContact(contactBook: *contacts.ContactBook, writer: *Io.Writer, reader: *Io.Reader) !void {
+    try writer.print("\n", .{});
+    var phone_buf: [100]u8 = undefined;
+
+    const phone = try inputReader("Phone to remove ==>", &phone_buf, writer, reader);
+
+    contactBook.removeContact(phone) catch {
+        try writer.print("Contact with phone# {s} not found,", .{phone});
+        return;
+    };
+    try writer.print("Contact with phone# {s} is removed successfully.", .{phone});
+}
+
+pub fn searchContact(contactBook: *contacts.ContactBook, writer: *Io.Writer, reader: *Io.Reader) !void {
+    try writer.print("\n", .{});
+    var name_buf: [100]u8 = undefined;
+
+    const name = try inputReader("Name to search ==> ", &name_buf, writer, reader);
+
+    const contact = contactBook.searchByName(name) catch {
+        try writer.print("Name {s} not found.", .{name});
+        return;
+    };
+    try writer.print("Name: {s}, Email: {s}, Phone: {s}\n", .{ contact.name, contact.email, contact.phone });
 }
 
 test "simple test" {
